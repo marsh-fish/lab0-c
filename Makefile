@@ -59,6 +59,9 @@ check: qtest
 test: qtest scripts/driver.py
 	scripts/driver.py -c
 
+shuffle_test: qtest 
+	python3 scripts/shuffle_driver.py
+
 valgrind_existence:
 	@which valgrind 2>&1 > /dev/null || (echo "FATAL: valgrind not found"; exit 1)
 

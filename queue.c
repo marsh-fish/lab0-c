@@ -4,6 +4,16 @@
 
 #include "queue.h"
 
+/**
+ * q_shuffle() - Shuffle elements of queue
+ * @head: header of queue
+ *
+ * No effect if queue is NULL or empty. If there has only one element, do
+ * nothing.
+ */
+void q_shuffle(struct list_head *head);
+
+
 /* Notice: sometimes, Cppcheck would find the potential NULL pointer bugs,
  * but some of them cannot occur. You can suppress them by adding the
  * following line.
@@ -341,4 +351,31 @@ int q_merge(struct list_head *head, bool descend)
     }
 
     return q_size(this);
+}
+
+static inline void swap(struct list_head *a, struct list_head *b)
+{
+    element_t *a_entry = list_entry(a, element_t, list);
+    element_t *b_entry = list_entry(b, element_t, list);
+    char *tmp = b_entry->value;
+    b_entry->value = a_entry->value;
+    a_entry->value = tmp;
+}
+
+/* Shuffle elements of queue */
+void q_shuffle(struct list_head *head)
+{
+    if (!head || list_is_singular(head))
+        return;
+
+    int len = q_size(head) - 1;
+    struct list_head *new;
+
+    for (new = head->prev; new != head &&len; new = new->prev, len--) {
+        int r = rand() % len;
+        struct list_head *old = head->next;
+        while (r--)
+            old = old->next;
+        swap(old, new);
+    }
 }
