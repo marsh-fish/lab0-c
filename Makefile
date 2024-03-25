@@ -6,6 +6,7 @@ CFLAGS += -Wvla
 
 GIT_HOOKS := .git/hooks/applied
 DUT_DIR := dudect
+AGE_DIR := agents
 all: $(GIT_HOOKS) qtest
 
 tid := 0
@@ -37,10 +38,11 @@ $(GIT_HOOKS):
 	@scripts/install-git-hooks
 	@echo
 
-OBJS := qtest.o report.o console.o harness.o queue.o \
+OBJS := qtest.o report.o console.o harness.o queue.o list_sort.o\
         random.o dudect/constant.o dudect/fixture.o dudect/ttest.o \
         shannon_entropy.o \
-        linenoise.o web.o
+        linenoise.o web.o \
+		game.o mt19937-64.o zobrist.o agents/negamax.o
 
 deps := $(OBJS:%.o=.%.o.d)
 
@@ -50,6 +52,7 @@ qtest: $(OBJS)
 
 %.o: %.c
 	@mkdir -p .$(DUT_DIR)
+	@mkdir -p .$(AGE_DIR)
 	$(VECHO) "  CC\t$@\n"
 	$(Q)$(CC) -o $@ $(CFLAGS) -c -MMD -MF .$@.d $<
 
@@ -61,6 +64,10 @@ test: qtest scripts/driver.py
 
 shuffle_test: qtest 
 	python3 scripts/shuffle_driver.py
+
+sort_test: qtest
+	perf stat -e  cache-misses,branches,cache-references,instructions,cycles,context-switches ./qtest -f ./traces/trace-sort-1000000.cmd
+	perf stat -e  cache-misses,branches,cache-references,instructions,cycles,context-switches ./qtest -f ./traces/trace-list_sort-1000000.cmd
 
 valgrind_existence:
 	@which valgrind 2>&1 > /dev/null || (echo "FATAL: valgrind not found"; exit 1)
@@ -80,6 +87,7 @@ valgrind: valgrind_existence
 clean:
 	rm -f $(OBJS) $(deps) *~ qtest /tmp/qtest.*
 	rm -rf .$(DUT_DIR)
+	rm -rf .$(AGE_DIR)
 	rm -rf *.dSYM
 	(cd traces; rm -f *~)
 

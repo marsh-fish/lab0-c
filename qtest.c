@@ -44,7 +44,10 @@ extern int show_entropy;
  */
 #include "queue.h"
 
+#include <ctype.h>
+#include "agents/negamax.h"
 #include "console.h"
+#include "game.h"
 #include "report.h"
 
 /* Settable parameters */
@@ -58,6 +61,12 @@ extern int show_entropy;
 #define BIG_LIST_SIZE 30
 
 /* Global variables */
+typedef int (*list_cmp_func_t)(void *,
+                               const struct list_head *,
+                               const struct list_head *);
+__attribute__((nonnull(2, 3))) void list_sort(void *,
+                                              struct list_head *,
+                                              list_cmp_func_t);
 
 void q_shuffle(struct list_head *head);
 
@@ -76,6 +85,13 @@ static int fail_count = 0;
 static int string_length = MAXSTRING;
 
 static int descend = 0;
+
+/* Record the order of moves */
+static int move_record[N_GRIDS];
+static int move_count = 0;
+
+/* indicates the current mode of ttt */
+static enum game_mode ttt_mode = PVE;
 
 #define MIN_RANDSTR_LEN 5
 #define MAX_RANDSTR_LEN 10
@@ -631,6 +647,63 @@ bool do_sort(int argc, char *argv[])
     return ok && !error_check();
 }
 
+int cmp(void *priv, const struct list_head *a, const struct list_head *b)
+{
+    (void) priv;
+    return strcmp(list_entry(a, element_t, list)->value,
+                  list_entry(b, element_t, list)->value);
+}
+
+bool do_listsort(int argc, char *argv[])
+{
+    if (argc != 1) {
+        report(1, "%s takes no arguments", argv[0]);
+        return false;
+    }
+
+    int cnt = 0;
+    if (!current || !current->q)
+        report(3, "Warning: Calling sort on null queue");
+    else
+        cnt = q_size(current->q);
+    error_check();
+
+    if (cnt < 2)
+        report(3, "Warning: Calling sort on single node");
+    error_check();
+
+    set_noallocate_mode(true);
+    if (current && exception_setup(true))
+        list_sort(NULL, current->q, cmp);
+    exception_cancel();
+    set_noallocate_mode(false);
+
+    bool ok = true;
+    if (current && current->size) {
+        for (struct list_head *cur_l = current->q->next;
+             cur_l != current->q && --cnt; cur_l = cur_l->next) {
+            /* Ensure each element in ascending/descending order */
+            element_t *item, *next_item;
+            item = list_entry(cur_l, element_t, list);
+            next_item = list_entry(cur_l->next, element_t, list);
+            if (!descend && strcmp(item->value, next_item->value) > 0) {
+                report(1, "ERROR: Not sorted in ascending order");
+                ok = false;
+                break;
+            }
+
+            if (descend && strcmp(item->value, next_item->value) < 0) {
+                report(1, "ERROR: Not sorted in descending order");
+                ok = false;
+                break;
+            }
+        }
+    }
+
+    q_show(3);
+    return ok && !error_check();
+}
+
 static bool do_dm(int argc, char *argv[])
 {
     if (argc != 1) {
@@ -1023,13 +1096,13 @@ static bool do_shuffle(int argc, char *argv[])
 
     int cnt = 0;
     if (!current || !current->q)
-        report(3, "Warning: Calling sort on null queue");
+        report(3, "Warning: Calling shuffle on null queue");
     else
         cnt = q_size(current->q);
     error_check();
 
     if (cnt < 2)
-        report(3, "Warning: Calling sort on single node");
+        report(3, "Warning: Calling shuffle on single node");
     error_check();
 
     set_noallocate_mode(true);
@@ -1040,6 +1113,166 @@ static bool do_shuffle(int argc, char *argv[])
 
 
     return q_show(3) && !error_check();
+}
+
+static void record_move(int move)
+{
+    move_record[move_count++] = move;
+}
+
+static void print_moves()
+{
+    printf("Moves: ");
+    for (int i = 0; i < move_count; i++) {
+        printf("%c%d", 'A' + GET_COL(move_record[i]),
+               1 + GET_ROW(move_record[i]));
+        if (i < move_count - 1) {
+            printf(" -> ");
+        }
+    }
+    printf("\n");
+}
+
+static int get_input(char player)
+{
+    char *line = NULL;
+    size_t line_length = 0;
+    int parseX = 1;
+
+    int x = -1, y = -1;
+    while (x < 0 || x > (BOARD_SIZE - 1) || y < 0 || y > (BOARD_SIZE - 1)) {
+        printf("%c> ", player);
+        int r = getline(&line, &line_length, stdin);
+        if (r == -1)
+            exit(1);
+        if (r < 2)
+            continue;
+        x = 0;
+        y = 0;
+        parseX = 1;
+        for (int i = 0; i < (r - 1); i++) {
+            if (isalpha(line[i]) && parseX) {
+                x = x * 26 + (tolower(line[i]) - 'a' + 1);
+                if (x > BOARD_SIZE) {
+                    // could be any value in [BOARD_SIZE + 1, INT_MAX]
+                    x = BOARD_SIZE + 1;
+                    printf("Invalid operation: index exceeds board size\n");
+                    break;
+                }
+                continue;
+            }
+            // input does not have leading alphabets
+            if (x == 0) {
+                printf("Invalid operation: No leading alphabet\n");
+                y = 0;
+                break;
+            }
+            parseX = 0;
+            if (isdigit(line[i])) {
+                y = y * 10 + line[i] - '0';
+                if (y > BOARD_SIZE) {
+                    // could be any value in [BOARD_SIZE + 1, INT_MAX]
+                    y = BOARD_SIZE + 1;
+                    printf("Invalid operation: index exceeds board size\n");
+                    break;
+                }
+                continue;
+            }
+            // any other character is invalid
+            // any non-digit char during digit parsing is invalid
+            // TODO: Error message could be better by separating these two cases
+            printf("Invalid operation\n");
+            x = y = 0;
+            break;
+        }
+        x -= 1;
+        y -= 1;
+    }
+    free(line);
+    return GET_INDEX(y, x);
+}
+
+static bool do_ttt(int argc, char *argv[])
+{
+    if (argc > 2) {
+        report(1, "%s takes too much arguments", argv[0]);
+        return false;
+    }
+    if (argc == 2) {
+        if (!strcmp(argv[1], "PVE"))
+            ttt_mode = PVE;
+        else if (!strcmp(argv[1], "EVE"))
+            ttt_mode = EVE;
+        else {
+            report(1, "%s takes error arguments %s", argv[0], argv[1]);
+            return false;
+        }
+    }
+
+    srand(time(NULL));
+    char table[N_GRIDS];
+    memset(table, ' ', N_GRIDS);
+    char turn = 'X';
+    char ai = 'O';
+
+#ifdef USE_RL
+    rl_agent_t agent;
+    unsigned int state_num = 1;
+    CALC_STATE_NUM(state_num);
+    init_rl_agent(&agent, state_num, 'O');
+    load_model(&agent, state_num, MODEL_NAME);
+#elif defined(USE_MCTS)
+    // A routine for initializing MCTS is not required.
+#else
+    negamax_init();
+#endif
+    while (1) {
+        char win = check_win(table);
+        if (win == 'D') {
+            draw_board(table);
+            printf("It is a draw!\n");
+            break;
+        } else if (win != ' ') {
+            draw_board(table);
+            printf("%c won!\n", win);
+            break;
+        }
+
+        if (turn == ai) {
+#ifdef USE_RL
+            int move = play_rl(table, &agent);
+            record_move(move);
+#elif defined(USE_MCTS)
+            int move = mcts(table, ai);
+            if (move != -1) {
+                table[move] = ai;
+                record_move(move);
+            }
+#else
+            int move = negamax_predict(table, ai).move;
+            if (move != -1) {
+                table[move] = ai;
+                record_move(move);
+            }
+#endif
+        } else {
+            draw_board(table);
+            int move;
+            while (1) {
+                move = get_input(turn);
+                if (table[move] == ' ') {
+                    break;
+                }
+                printf("Invalid operation: the position has been marked\n");
+            }
+            table[move] = turn;
+            record_move(move);
+        }
+        turn = turn == 'X' ? 'O' : 'X';
+    }
+    print_moves();
+
+    return 0;
 }
 
 static void console_init()
@@ -1066,6 +1299,7 @@ static void console_init()
         "[str]");
     ADD_COMMAND(reverse, "Reverse queue", "");
     ADD_COMMAND(sort, "Sort queue in ascending/descening order", "");
+    ADD_COMMAND(listsort, "Sort queue in ascending/descening order", "");
     ADD_COMMAND(size, "Compute queue size n times (default: n == 1)", "[n]");
     ADD_COMMAND(show, "Show queue contents", "");
     ADD_COMMAND(dm, "Delete middle node in queue", "");
@@ -1084,6 +1318,11 @@ static void console_init()
                 "[K]");
     ADD_COMMAND(shuffle,
                 "Shuffle the queue with Fisher–Yates shuffle algorithm", "");
+    ADD_COMMAND(ttt,
+                "Start a Tic-Tac-Toe game. Play against the computer if str "
+                "equals PVE. "
+                "If str equals EVE, the computer plays against the computer.",
+                "[str]");
     add_param("length", &string_length, "Maximum length of displayed string",
               NULL);
     add_param("malloc", &fail_probability, "Malloc failure probability percent",
