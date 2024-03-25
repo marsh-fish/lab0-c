@@ -21,6 +21,7 @@ CPPCHECK_suppresses="--inline-suppr harness.c \
 --suppress=variableScope:mt19937-64.c \
 --suppress=internalAstError:hlist.h \
 --suppress=constParameter:game.c \
+--suppress=unassignedVariable:list_sort.c \
 --suppress=nullPointer:agents/mcts.c \
 --suppress=variableScope:agents/mcts.c \
 --suppress=constParameter:agents/reinforcement_learning.c \
