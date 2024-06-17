@@ -66,8 +66,8 @@ shuffle_test: qtest
 	python3 scripts/shuffle_driver.py
 
 sort_test: qtest
-	perf stat -e  cache-misses,branches,cache-references,instructions,cycles,context-switches ./qtest -f ./traces/trace-sort-1000000.cmd
-	perf stat -e  cache-misses,branches,cache-references,instructions,cycles,context-switches ./qtest -f ./traces/trace-list_sort-1000000.cmd
+	perf stat --repeat 5 -e  cache-misses,branches,cache-references,instructions,cycles,context-switches ./qtest -f ./traces/trace-sort-1000000.cmd
+	perf stat --repeat 5 -e  cache-misses,branches,cache-references,instructions,cycles,context-switches ./qtest -f ./traces/trace-list_sort-1000000.cmd
 
 valgrind_existence:
 	@which valgrind 2>&1 > /dev/null || (echo "FATAL: valgrind not found"; exit 1)

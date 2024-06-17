@@ -25,9 +25,10 @@ void q_shuffle(struct list_head *head);
 struct list_head *q_new()
 {
     struct list_head *head = malloc(sizeof(struct list_head));
-    if (!head)
-        return NULL;
-    INIT_LIST_HEAD(head);
+    if (head) {
+        INIT_LIST_HEAD(head);
+    }
+
     return head;
 }
 
@@ -44,21 +45,33 @@ void q_free(struct list_head *head)
     return;
 }
 
+/*
+ * New an element for s,
+ * It will allocate memory for s
+ * Return null if allocation failed.
+ */
+element_t *new_element(char *s)
+{
+    element_t *new = malloc(sizeof(element_t));
+    if (!new)
+        return NULL;
+    new->value = strdup(s);
+    if (!new->value) {
+        free(new);
+        return NULL;
+    }
+    return new;
+}
+
 /* Insert an element at head of queue */
 bool q_insert_head(struct list_head *head, char *s)
 {
     if (!head)
         return false;
 
-    element_t *new = malloc(sizeof(element_t));
+    element_t *new = new_element(s);
     if (!new)
         return false;
-
-    new->value = strdup(s);
-    if (!new->value) {
-        free(new);
-        return false;
-    }
     list_add(&new->list, head);
 
     return true;
@@ -70,15 +83,9 @@ bool q_insert_tail(struct list_head *head, char *s)
     if (!head)
         return false;
 
-    element_t *new = malloc(sizeof(element_t));
+    element_t *new = new_element(s);
     if (!new)
         return false;
-
-    new->value = strdup(s);
-    if (!new->value) {
-        free(new);
-        return false;
-    }
     list_add_tail(&new->list, head);
 
     return true;
@@ -105,15 +112,7 @@ element_t *q_remove_tail(struct list_head *head, char *sp, size_t bufsize)
 {
     if (!head)
         return NULL;
-
-    element_t *temp = list_last_entry(head, element_t, list);
-    if (sp) {
-        memcpy(sp, temp->value, bufsize);
-        *(sp + bufsize - 1) = '\0';
-    }
-    list_del(&temp->list);
-
-    return temp;
+    return q_remove_head(head->prev->prev, sp, bufsize);
 }
 
 /* Return number of elements in queue */
