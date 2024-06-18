@@ -25,10 +25,8 @@ void q_shuffle(struct list_head *head);
 struct list_head *q_new()
 {
     struct list_head *head = malloc(sizeof(struct list_head));
-    if (head) {
+    if (head)
         INIT_LIST_HEAD(head);
-    }
-
     return head;
 }
 
@@ -68,12 +66,10 @@ bool q_insert_head(struct list_head *head, char *s)
 {
     if (!head)
         return false;
-
     element_t *new = new_element(s);
     if (!new)
         return false;
     list_add(&new->list, head);
-
     return true;
 }
 
@@ -82,12 +78,10 @@ bool q_insert_tail(struct list_head *head, char *s)
 {
     if (!head)
         return false;
-
     element_t *new = new_element(s);
     if (!new)
         return false;
     list_add_tail(&new->list, head);
-
     return true;
 }
 
@@ -96,7 +90,6 @@ element_t *q_remove_head(struct list_head *head, char *sp, size_t bufsize)
 {
     if (!head || head == head->prev)
         return NULL;
-
     element_t *temp = list_first_entry(head, element_t, list);
     if (sp) {
         memcpy(sp, temp->value, bufsize);
