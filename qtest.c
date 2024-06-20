@@ -50,6 +50,7 @@ extern int show_entropy;
 #include "game.h"
 #include "report.h"
 
+#include "treesort.h"
 /* Settable parameters */
 
 #define HISTORY_LEN 20
@@ -704,6 +705,54 @@ bool do_listsort(int argc, char *argv[])
     return ok && !error_check();
 }
 
+bool do_treesort(int argc, char *argv[])
+{
+    if (argc != 1) {
+        report(1, "%s takes no arguments", argv[0]);
+        return false;
+    }
+
+    int cnt = 0;
+    if (!current || !current->q)
+        report(3, "Warning: Calling sort on null queue");
+    else
+        cnt = q_size(current->q);
+    error_check();
+
+    if (cnt < 2)
+        report(3, "Warning: Calling sort on single node");
+    error_check();
+
+    if (current && exception_setup(true))
+        tree_sort(current->q);
+    exception_cancel();
+
+    bool ok = true;
+    if (current && current->size) {
+        for (struct list_head *cur_l = current->q->next;
+             cur_l != current->q && --cnt; cur_l = cur_l->next) {
+            /* Ensure each element in ascending/descending order */
+            element_t *item, *next_item;
+            item = list_entry(cur_l, element_t, list);
+            next_item = list_entry(cur_l->next, element_t, list);
+            if (!descend && strcmp(item->value, next_item->value) > 0) {
+                report(1, "ERROR: Not sorted in ascending order");
+                ok = false;
+                break;
+            }
+
+            if (descend && strcmp(item->value, next_item->value) < 0) {
+                report(1, "ERROR: Not sorted in descending order");
+                ok = false;
+                break;
+            }
+        }
+    }
+
+    q_show(3);
+    return ok && !error_check();
+}
+
 static bool do_dm(int argc, char *argv[])
 {
     if (argc != 1) {
@@ -1299,7 +1348,10 @@ static void console_init()
         "[str]");
     ADD_COMMAND(reverse, "Reverse queue", "");
     ADD_COMMAND(sort, "Sort queue in ascending/descening order", "");
-    ADD_COMMAND(listsort, "Sort queue in ascending/descening order", "");
+    ADD_COMMAND(listsort,
+                "Sort queue in ascending/descening order with listsort", "");
+    ADD_COMMAND(treesort,
+                "Sort queue in ascending/descening order with tree sort", "");
     ADD_COMMAND(size, "Compute queue size n times (default: n == 1)", "[n]");
     ADD_COMMAND(show, "Show queue contents", "");
     ADD_COMMAND(dm, "Delete middle node in queue", "");
