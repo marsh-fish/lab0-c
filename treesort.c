@@ -238,15 +238,6 @@ void cmap_calibrate(cmap_t obj)
         obj->it_least = obj->it_most = NULL;
         return;
     }
-
-    /* Recompute it_least and it_most */
-    obj->it_least = obj->it_most = obj->head;
-
-    while (obj->it_least->left)
-        obj->it_least = obj->it_least->left;
-
-    while (obj->it_most->right)
-        obj->it_most = obj->it_most->right;
 }
 cmap_t cmap_new(size_t s1, size_t s2, int (*cmp)(void *, void *))
 {
@@ -259,14 +250,6 @@ cmap_t cmap_new(size_t s1, size_t s2, int (*cmp)(void *, void *))
     obj->size = 0;
 
     obj->comparator = cmp;
-
-    obj->it_end = malloc(sizeof(struct rb_node));
-    obj->it_least = malloc(sizeof(struct rb_node));
-    obj->it_most = malloc(sizeof(struct rb_node));
-
-    obj->it_end->left = obj->it_end->right = NULL;
-    obj->it_least->left = obj->it_least->right = NULL;
-    obj->it_most->left = obj->it_most->right = NULL;
 
     return obj;
 }
@@ -283,7 +266,7 @@ bool cmap_insert(cmap_t obj, node_t *node, void *value)
         rb_set_black(obj->head);
 
         /* Calibrate the tree to properly assign pointers. */
-        cmap_calibrate(obj);
+        // cmap_calibrate(obj);
         return true;
     }
 
@@ -312,7 +295,7 @@ bool cmap_insert(cmap_t obj, node_t *node, void *value)
         }
     }
 
-    cmap_calibrate(obj);
+    // cmap_calibrate(obj);
     return true;
 }
 
@@ -378,5 +361,7 @@ void tree_sort(struct list_head *head)
     }
 
     tree_free(map->head);
+
+    // Free the cmap object
     free(map);
 }
